@@ -1,0 +1,4 @@
+D1.mat through D4.mat are the datasets used in Exercise 1.
+market.map is the dataset used in exercise 2.
+CItest.m is the MATLAB implementation of CI test.
+ci_test.py is the python implementation of CI test.
