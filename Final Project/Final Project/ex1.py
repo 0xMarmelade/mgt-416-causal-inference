@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[2]:
+# In[38]:
 
 
 import scipy.io
@@ -15,7 +15,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 
-# In[19]:
+# In[39]:
 
 
 datasets = []
@@ -27,7 +27,7 @@ for dataset_i in range(1,5):
 
 # ## 1.1 SGS Algorithm
 
-# In[4]:
+# In[40]:
 
 
 def sgs(dataset: np.ndarray) -> (np.ndarray, [set]):
@@ -35,6 +35,9 @@ def sgs(dataset: np.ndarray) -> (np.ndarray, [set]):
     all_nodes = range(n_columns)
 
     adjacency_matrix =  np.zeros((n_columns, n_columns))
+
+    test_counter = []
+    counter = 0
 
     # Initialize a list of sets to keep for the edge orientation phase
     #Z_set = np.full((n_columns, n_columns), set())
@@ -48,25 +51,33 @@ def sgs(dataset: np.ndarray) -> (np.ndarray, [set]):
             possible_controls = list(all_nodes).copy()
             possible_controls.remove(node_i)
             possible_controls.remove(node_j)
-            for n_controls in range(len(possible_controls)):
-                condition_set = list(itertools.combinations(possible_controls, n_controls))
 
-                conditionnal_indep_does_not_hold = True
+            conditionnal_indep_does_not_hold = True
+            for n_controls in range(len(possible_controls)):
+                if not conditionnal_indep_does_not_hold:
+                    break
+                condition_set = itertools.combinations(possible_controls, n_controls)
+
+
                 for condition in condition_set:
+                    counter += 1
                     if ci_test(dataset, node_i, node_j, condition):
                         conditionnal_indep_does_not_hold = False
-                        break
-                if conditionnal_indep_does_not_hold:
-                    adjacency_matrix[node_i][node_j] = adjacency_matrix[node_j][node_i] = 1
-                    Z_set[node_i][node_j] |= set(condition_set)
-                    Z_set[node_i][node_j] |= set(condition_set)
 
+                        Z_set[node_i][node_j] |= set(condition)
+                        Z_set[node_i][node_j] |= set(condition)
+
+                        break
+            if conditionnal_indep_does_not_hold:
+                adjacency_matrix[node_i][node_j] = adjacency_matrix[node_j][node_i] = 1
+
+    print(counter)
     return adjacency_matrix, Z_set
 
 
 # ## 1.1 PC Algorithm
 
-# In[5]:
+# In[41]:
 
 
 def pc1(dataset: np.ndarray) -> (np.ndarray, [set]):
@@ -78,6 +89,7 @@ def pc1(dataset: np.ndarray) -> (np.ndarray, [set]):
 
     Z_set = [[set() for i in range(n_columns)] for j in range(n_columns)]
     # Pick the 1st variable
+    counter = 0
     for node_i in all_nodes:
         nodes = list(all_nodes)
         nodes.remove(node_i)
@@ -90,19 +102,20 @@ def pc1(dataset: np.ndarray) -> (np.ndarray, [set]):
                 possible_controls.remove(node_j)
 
 
-                for condition_set in list(itertools.combinations(possible_controls, n_controls)):
-                    if ci_test(dataset, node_i, node_j, condition_set):
+                for condition in list(itertools.combinations(possible_controls, n_controls)):
+                    counter += 1
+                    if ci_test(dataset, node_i, node_j, condition):
                         adjacency_matrix[node_i][node_j] =  adjacency_matrix[node_j][node_i] = 0
 
-                        Z_set[node_i][node_j] |= set(condition_set)
-                        Z_set[node_j][node_i] |= set(condition_set)
-
+                        Z_set[node_i][node_j] |= set(condition)
+                        Z_set[node_j][node_i] |= set(condition)
+    print(counter)
     return adjacency_matrix, Z_set
 
 
 # 1.2 Modified PC algorithm
 
-# In[6]:
+# In[42]:
 
 
 def pc2(dataset: np.ndarray) -> (np.ndarray, [set]):
@@ -111,44 +124,40 @@ def pc2(dataset: np.ndarray) -> (np.ndarray, [set]):
 
     adjacency_matrix =  np.zeros((n_columns, n_columns))
     Z_set = [[set() for i in range(n_columns)] for j in range(n_columns)]
-
+    counter = 0
     for node_i in all_nodes:
         nodes = list(all_nodes)
         nodes.remove(node_i)
         # Pick a different 2nd variable
         for node_j in nodes:
             # Pick a condition set
+            possible_controls = list(all_nodes)
+            possible_controls.remove(node_i)
+            possible_controls.remove(node_j)
+
+            counter += 1
+            if not ci_test(dataset, node_i, node_j, possible_controls):
+                adjacency_matrix[node_i][node_j] = adjacency_matrix[node_j][node_i] =  1
+
             for n_controls in all_nodes:
-                possible_controls = list(all_nodes)
-                possible_controls.remove(node_i)
-                possible_controls.remove(node_j)
-
-                if not ci_test(dataset, node_i, node_j, possible_controls):
-                    adjacency_matrix[node_i][node_j] = 1
-
                 for condition in itertools.combinations(possible_controls, n_controls):
+                    counter += 1
                     if ci_test(dataset, node_i, node_j, condition):
-                        adjacency_matrix[node_i][node_j] = 0
+                        adjacency_matrix[node_i][node_j] = adjacency_matrix[node_j][node_i] = 0
 
                         Z_set[node_i][node_j] |= set(condition)
                         Z_set[node_j][node_i] |= set(condition)
                         break
 
 
+    print(counter)
     return adjacency_matrix, Z_set
 
 
 # ## 2 Orienting the edges
 # ### 2.1 Starting with V-structures
 
-# In[7]:
-
-
-for (i,j,k) in itertools.combinations([1,2,3,4,5], 3):
-    print(i,j,k)
-
-
-# In[12]:
+# In[43]:
 
 
 def add_v_structures(graph: nx.Graph, Z_sets: [set]) -> nx.DiGraph:
@@ -162,10 +171,11 @@ def add_v_structures(graph: nx.Graph, Z_sets: [set]) -> nx.DiGraph:
             nodes_k = list(nodes_j)
             nodes_k.remove(j)
             for k in nodes_k:
+                # if i -> j -> k and not (i -> k && j not in Z), keep i->j<-k
                 if directed_graph.has_edge(i,j) and directed_graph.has_edge(j,k) and (not directed_graph.has_edge(i,k)):
                     if j not in Z_sets[i][k]:
-                        if directed_graph.has_edge(i,j):
-                            directed_graph.remove_edge(i,j)
+                        if directed_graph.has_edge(j,i):
+                            directed_graph.remove_edge(j,i)
                         if directed_graph.has_edge(k,j):
                             directed_graph.remove_edge(k,j)
     return directed_graph
@@ -173,38 +183,51 @@ def add_v_structures(graph: nx.Graph, Z_sets: [set]) -> nx.DiGraph:
 
 # ## 2.2 Adding the two meek rules
 
-# In[48]:
+# In[44]:
 
 
 def add_meek_rules(directed_graph: nx.DiGraph) -> nx.DiGraph:
-    for node_pair in itertools.combinations(directed_graph, 2):
-        node_i, node_j = node_pair
+    nodes = range(len(graph.nodes))
 
-        # meek 1
-        if directed_graph.has_edge(node_i, node_j) & directed_graph.has_edge(node_j, node_i):
-            to_remove = set()
-            for parent in directed_graph.predecessors(node_i):
-                if directed_graph.has_edge(node_i, parent) or (directed_graph.has_edge(parent, node_j) or directed_graph.has_edge(node_j, parent)):
-                    continue
-                else:
-                   to_remove.add((node_j,node_i))
+    for i in nodes :
+        nodes_j = list(nodes)
+        nodes_j.remove(i)
+        for j in nodes_j:
+            nodes_k = list(nodes_j)
+            nodes_k.remove(j)
 
-            for pair in to_remove:
-                directed_graph.remove_edge(*pair)
+            # meek 1
+            # if  parent->i-j and not parent-j, do i->j
+            if directed_graph.has_edge(i, j) & directed_graph.has_edge(j, i):
+                to_remove = set()
+                for parent in directed_graph.predecessors(i):
+                    if directed_graph.has_edge(i, parent) or (directed_graph.has_edge(parent, j) or directed_graph.has_edge(j, parent)):
+                        continue
+                    else:
+                       to_remove.add((j,i))
 
+                for pair in to_remove:
+                    directed_graph.remove_edge(*pair)
 
-        # meek 2
-        if directed_graph.has_edge(node_i, node_j) & directed_graph.has_edge(node_j, node_i):
-            for child in directed_graph.successors(node_i):
-                if (not directed_graph.has_edge(child, node_i)) and directed_graph.has_edge(child, node_j):
-                    directed_graph.remove_edge(node_j, node_i)
+    for i in nodes :
+        nodes_j = list(nodes)
+        nodes_j.remove(i)
+        for j in nodes_j:
+            nodes_k = list(nodes_j)
+            nodes_k.remove(j)
+            # meek 2
+            # if i->k->j and i-j, do i->j
+            if directed_graph.has_edge(i, j) & directed_graph.has_edge(j, i):
+                for child in directed_graph.successors(i):
+                    if directed_graph.has_edge(child, j):
+                        directed_graph.remove_edge(j, i)
 
     return  directed_graph
 
 
 # 
 
-# In[42]:
+# In[45]:
 
 
 sgs_directed_graphs = []
@@ -217,7 +240,7 @@ for dataset in datasets[:3]:
     sgs_directed_graphs.append(add_meek_rules(directed_graph))
 
 
-# In[29]:
+# In[46]:
 
 
 pc1_directed_graphs = []
@@ -230,7 +253,7 @@ for dataset in datasets[:3]:
     pc1_directed_graphs.append(add_meek_rules(directed_graph))
 
 
-# In[30]:
+# In[47]:
 
 
 pc2_directed_graphs = []
@@ -245,7 +268,7 @@ for dataset in datasets[:3]:
 
 # ## D4 Matrix results
 
-# In[23]:
+# In[ ]:
 
 
 # For heavier matrix
@@ -259,41 +282,50 @@ pc2_directed_graphs.append(add_meek_rules(directed_graph))
 # ## 3. Results
 # ## 3.1 SGS Graphs
 
-# In[43]:
-
-
-nx.draw(sgs_directed_graphs[0], with_labels=True)
-
-
 # In[49]:
 
 
-nx.draw(sgs_directed_graphs[1], with_labels=True)
+plt.figure(figsize=(10,6))
+nx.draw_networkx(sgs_directed_graphs[0], with_labels=True)
 
-
-# In[45]:
-
-
-nx.draw(sgs_directed_graphs[2], with_labels=True)
-
-
-# ## 3.2 PC1 Graphs
 
 # In[50]:
 
 
+plt.figure(figsize=(10,5))
+nx.draw_networkx(sgs_directed_graphs[1], with_labels=True)
+
+
+# In[51]:
+
+
+plt.figure(figsize=(10,6))
+nx.draw_networkx(sgs_directed_graphs[2], with_labels=True)
+
+
+# ## 3.2 PC1 Graphs
+
+# 
+
+# In[52]:
+
+
+plt.figure(figsize=(6,4))
 nx.draw(pc1_directed_graphs[0], with_labels=True)
 
 
-# In[36]:
+# 
+
+# In[53]:
 
 
+plt.figure(figsize=(8,5))
 nx.draw(pc1_directed_graphs[1], with_labels=True)
 
 
 # 
 
-# In[37]:
+# In[54]:
 
 
 nx.draw(pc1_directed_graphs[2], with_labels=True)
@@ -301,20 +333,22 @@ nx.draw(pc1_directed_graphs[2], with_labels=True)
 
 # ## 3.2 PC2 Graphs
 
-# In[51]:
+# In[55]:
 
 
 nx.draw(pc2_directed_graphs[0], with_labels=True)
 
 
-# In[52]:
+# In[56]:
 
 
+plt.figure(figsize=(8,5))
 nx.draw(pc2_directed_graphs[1], with_labels=True)
 
 
-# In[54]:
+# In[57]:
 
 
+plt.figure(figsize=(8,6))
 nx.draw(pc2_directed_graphs[2], with_labels=True)
 
